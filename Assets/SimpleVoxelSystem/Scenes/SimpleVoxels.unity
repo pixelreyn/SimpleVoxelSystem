@@ -276,6 +276,10 @@ MonoBehaviour:
   rootBoundsCentered:
     m_Center: {x: 0, y: 0, z: 0}
     m_Extent: {x: 8, y: 8, z: 8}
+  rayMarchingMaterial: {fileID: 0}
+  sceneLight: {fileID: 0}
+  Dynamic: 0
+  IsPlaying: 0
 --- !u!23 &744558718
 MeshRenderer:
   m_ObjectHideFlags: 0
