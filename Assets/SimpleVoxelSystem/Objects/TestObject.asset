@@ -55,9 +55,6 @@ MonoBehaviour:
   - position: {x: -1.5, y: -0.5, z: -0.5}
     size: 1
     voxelData: 0
-  - position: {x: -0.5, y: -0.5, z: -1.5}
-    size: 1
-    voxelData: 0
   - position: {x: -0.5, y: -0.5, z: -0.5}
     size: 1
     voxelData: 0

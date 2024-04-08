@@ -105,6 +105,57 @@ namespace PixelReyn.SimpleVoxelSystem
             }
         }
 
+        public GPUNode[] FlattenForGPU()
+        {
+            if(root == null)
+            return new GPUNode[0];
+
+            List<GPUNode> linearNodes = new List<GPUNode>
+            {
+                new GPUNode(root.Position, root.Bounds.size.x / 2, 1, -1)
+            };
+            FlattenNodeGPU(root, linearNodes, 0); // Start with root node
+            return linearNodes.ToArray();;
+        }
+
+        private int FlattenNodeGPU(OctreeNode node, List<GPUNode> linearNodes, int nodeIndex)
+        {
+            if (node == null) return -1;
+
+            if (node.children != null)
+            {
+                int firstChildIndex = linearNodes.Count; // The first child's index will be the next position in the list
+                //Initialize the children in the list, leaving only their childIndex unset
+                for (int i = 0; i < 8; i++){
+                    var child = node.children[i];
+                    int voxelData = -1;
+                    if(child.voxel != null){
+                        voxelData = child.voxel.Data;
+                    }
+                    float halfSize = child.Bounds.size.x / 2;
+                    linearNodes.Add(new GPUNode(node.children[i].Position, halfSize, -1, voxelData));
+                }
+
+                //Add the children and their children to the list
+                for (int i = 0; i < 8; i++)
+                {
+                    var idx = firstChildIndex + i;
+                    var childNode = linearNodes[idx];
+                    childNode.childIndex = FlattenNodeGPU(node.children[i], linearNodes, idx);
+                    linearNodes[idx] = childNode; // Update the child node in the list
+                }
+
+                // Now that all children are processed, update this node's childIndex
+                var curNode = linearNodes[nodeIndex];
+                curNode.childIndex = firstChildIndex;
+                linearNodes[nodeIndex] = curNode;
+                return firstChildIndex;
+            } 
+            
+            return -1;
+
+        }
+
         public void Clear(float minSize = 1f){
             root = null;
             serializedNodes.Clear();
@@ -113,6 +164,7 @@ namespace PixelReyn.SimpleVoxelSystem
                 UnityEditor.EditorUtility.SetDirty(this);
             #endif
         }
+
         public void Clear(Bounds bounds, float minSize = 1f){
             root = null;
             serializedNodes.Clear();
@@ -128,5 +180,30 @@ namespace PixelReyn.SimpleVoxelSystem
         public Vector3 position;
         public float size; // Assuming cubic nodes for simplicity
         public short voxelData; // Voxel data, could be more complex or a reference
+    }
+
+    public struct GPUNode
+    {
+        public Vector3 position;
+        public float halfSize;  // Half the length of one side of the node cube
+        public int childIndex; // Index of the first child in the linear array, -1 for leaf nodes
+        public int voxelData; // Encoded voxel data
+
+
+        public GPUNode(Vector3 position, float halfSize, int childIndex, int voxelData)
+        {
+            this.position = position;
+            this.halfSize = halfSize;
+            this.childIndex = childIndex;
+            this.voxelData = voxelData;
+
+        }
+        public bool Contains(Vector3 point) {
+            Vector3 min = position - new Vector3(halfSize, halfSize, halfSize);
+            Vector3 max = position + new Vector3(halfSize, halfSize, halfSize);
+            return position.x >= min.x && position.x <= max.x && 
+                position.y >= min.y && position.y <= max.y && 
+                position.z >= min.z && position.z <= max.z;
+        }
     }
 }

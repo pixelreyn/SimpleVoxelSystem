@@ -20,12 +20,24 @@ namespace PixelReyn.SimpleVoxelSystem
     public class VoxelContainer : MonoBehaviour
     {
         public VoxelObject VoxelObject;
+        private VoxelObject runtimeObject;
         private Vector3 position;
         public Bounds rootBoundsCentered;
 
+        public Material rayMarchingMaterial;
+        public Light sceneLight; // Assign your main light here
+        public bool Dynamic = false;
+        ComputeBuffer octreeBuffer;
+        ComputeBuffer colorBuffer;
+        private GPUNode[] nodes;
+        private bool IsInitialized = false;
+        public bool IsPlaying = false;
 
 
         private void Awake(){
+            if(Application.isPlaying)
+                InitializeBuffers();
+
             position = transform.position;
             rootBoundsCentered = voxelObject.root.Bounds;
             rootBoundsCentered.center = transform.position;
@@ -57,6 +69,7 @@ namespace PixelReyn.SimpleVoxelSystem
             }
 
         }
+
         public VoxelObject voxelObject {
             get
             {
@@ -64,8 +77,140 @@ namespace PixelReyn.SimpleVoxelSystem
             }
         }
 
-        public void DestroyBuffers(){
+        public void InitializeBuffers(bool force = false){
+            if(IsInitialized && !force)
+                return;
 
+            if(Application.isPlaying && runtimeObject == null){
+                runtimeObject = Instantiate(VoxelObject);
+            }
+            IsPlaying = Application.isPlaying;
+
+            nodes = voxelObject.FlattenForGPU();
+            
+            octreeBuffer?.Release();
+            colorBuffer?.Release();
+
+            if(nodes.Length == 0)
+                return;
+
+            octreeBuffer = new ComputeBuffer(nodes.Length, 24, ComputeBufferType.Default);
+            octreeBuffer.SetData(nodes);
+
+            colorBuffer = new ComputeBuffer(VoxelSettings.Instance.voxelColors.Length, 16, ComputeBufferType.Default);
+            colorBuffer.SetData(VoxelSettings.Instance.voxelColors);
+            if(rayMarchingMaterial){
+            if(!rayMarchingMaterial.name.Contains("Clone"))
+                rayMarchingMaterial = Instantiate(rayMarchingMaterial);
+
+                rayMarchingMaterial.SetBuffer("_SVOBuffer", octreeBuffer);
+                rayMarchingMaterial.SetBuffer("_VoxelColors", colorBuffer);
+
+                GetComponent<MeshRenderer>().material = rayMarchingMaterial;
+            }
+            IsInitialized = true;
+        }
+        bool rayBoxIntersect(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax, out float tMin) {
+            float3 invDir = 1.0f / rayDir;
+            float3 t0 = (boxMin - rayOrigin) * invDir;
+            float3 t1 = (boxMax - rayOrigin) * invDir;
+        
+            float3 tmin = math.min(t0, t1);
+            float3 tmax = math.max(t0, t1);
+        
+            float tentry = math.max(tmin.x, math.max(tmin.y, tmin.z));
+            float texit = math.min(tmax.x, math.min(tmax.y, tmax.z));
+        
+            // Check if the ray originates inside the box
+            if (tentry < 0.0f && texit > 0.0f) {
+                tMin = 0.0f; // The ray originates inside the box
+                return true;
+            }
+        
+            // Check for intersection
+            if (tentry > texit || texit < 0.0) {
+                tMin = 0f;
+                return false; // No intersection
+            }
+        
+            tMin = tentry; // Distance to the nearest intersection
+            return true;
+        }
+
+        public (bool, Vector3, Vector3, Vector3) RayIntersect(Ray ray){
+            if(nodes.Length == 0 || nodes[0].childIndex == -1)
+                return (false, Vector3.zero, Vector3.zero, Vector3.zero);
+            int candidateCount = 1;
+            bool hit = false;
+            Vector3 hitNormal = Vector3.zero;
+            Vector3 hitCenter = Vector3.zero;
+
+            Candidate[] candidateNodes = new Candidate[16];
+            Candidate rootC;
+            rootC.nodeIndex = 0;
+            rootC.distance = 0;
+            candidateNodes[0] = rootC;
+
+            while (candidateCount > 0) {
+                int closestCandidateIndex = 0; // Assume the first candidate is the closest
+                // Find the closest candidate (could optimize this part by maintaining a sorted order of candidates)
+                for (int i = 1; i < candidateCount; ++i) {
+                    if (candidateNodes[i].distance < candidateNodes[closestCandidateIndex].distance) {
+                        closestCandidateIndex = i;
+                    }
+                }
+                
+                Candidate closestCandidate = candidateNodes[closestCandidateIndex];
+                // Remove the closest candidate from the list by swapping with the last and decrementing the count
+                candidateNodes[closestCandidateIndex] = candidateNodes[candidateCount - 1];
+                candidateCount--;
+            
+                GPUNode currentNode = nodes[closestCandidate.nodeIndex];
+
+                // If currentNode is a leaf with voxel data, perform shading and exit
+                if (currentNode.voxelData != -1){
+                    Vector3 currentPos = ray.origin + closestCandidate.distance * ray.direction;
+                    hit = true;
+                    hitCenter = currentNode.position;
+                    hitNormal = (transform.position + currentNode.position - currentPos).normalized;
+                    return (hit, hitNormal, hitCenter, currentPos - transform.position);
+                }
+            
+                // If not a leaf, add child nodes to candidates
+
+                for (int i = 0; i < 8; ++i) {
+                    if(currentNode.childIndex + i >= nodes.Length || currentNode.childIndex + i < 0)
+                        continue;
+
+                    GPUNode childNode = nodes[currentNode.childIndex + i];
+                    VBounds childBounds = new VBounds(childNode, transform.position);
+
+                    //Skip if this is a leaf with no data
+                    if(childNode.childIndex == -1 && childNode.voxelData == -1)
+                        continue;
+                        
+                    float distToChild;
+                    if (rayBoxIntersect(ray.origin, ray.direction, childBounds.min, childBounds.max, out distToChild)) {
+                        // Add childNode to candidates if it potentially intersects the ray
+                        if (candidateCount < 16) {
+                            Candidate newCandidate;
+                            newCandidate.nodeIndex = currentNode.childIndex + i;
+                            newCandidate.distance = distToChild;
+                            candidateNodes[candidateCount++] = newCandidate;
+                        }
+                    }
+                }
+            }
+            
+            return (hit, hitNormal, hitCenter, Vector3.zero);
+        }
+
+        public void DestroyBuffers(){
+            octreeBuffer?.Dispose();
+            colorBuffer?.Dispose();
+            octreeBuffer = null;
+            colorBuffer = null;
+            IsInitialized = false;
         }
 
         private void OnDisable(){
@@ -79,6 +224,37 @@ namespace PixelReyn.SimpleVoxelSystem
         private void Shutdown(){
             DestroyBuffers();
         }
+
+        struct Candidate {
+            public int nodeIndex;
+            public float distance;
+        }
+        public class VBounds
+        {
+            public float3 min;
+            public float3 max;
+            public float3 center;
+
+            public bool Contains(Vector3 position){
+                return position.x >= min.x && position.x <= max.x && 
+                position.y >= min.y && position.y <= max.y && 
+                position.z >= min.z && position.z <= max.z;
+            }
+
+            public VBounds (GPUNode node, Vector3 worldPos) {
+                float halfSize = node.halfSize;//clamp(node.halfSize, 0.5, 1000);
+                float3 pos = worldPos + node.position;
+                min = pos - new float3(halfSize, halfSize, halfSize);
+                max = pos + new float3(halfSize, halfSize, halfSize);
+                center = pos;
+            }
+            public VBounds(Vector3 center, float size) {
+                float halfSize = size / 2;
+                min = -new float3(halfSize, halfSize, halfSize);
+                max = new float3(halfSize, halfSize, halfSize);
+                this.center = center;
+            }
+        };
 
         #if UNITY_EDITOR
             [MenuItem("GameObject/SimpleVoxelSystem/Create Voxel Container", false, 10)]
