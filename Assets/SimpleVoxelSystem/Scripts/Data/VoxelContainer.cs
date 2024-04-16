@@ -35,29 +35,38 @@ namespace PixelReyn.SimpleVoxelSystem
 
 
         private void Awake(){
-            if(Application.isPlaying)
-                InitializeBuffers();
-
             position = transform.position;
             rootBoundsCentered = voxelObject.root.Bounds;
             rootBoundsCentered.center = transform.position;
             for(int x = -3; x < 3; x++)
             {
                 for(int z = -3; z < 3; z++){
-                    VoxelObject.AddVoxel(new Voxel(0, false, false), new Vector3(x,0,z));
+                    voxelObject.AddVoxel(new Voxel(0, false, false), new Vector3(x,0,z));
                 }
 
             }
-            VoxelObject.AddVoxel(new Voxel(1, false, false, 7), new Vector3(0,.125f,0));
+            voxelObject.AddVoxel(new Voxel(1, false, false, 7), new Vector3(0,.125f,0));
             
             #if UNITY_EDITOR
-                EditorUtility.SetDirty(VoxelObject);
+                EditorUtility.SetDirty(voxelObject);
             #endif
+            
+            if(Application.isPlaying)
+                InitializeBuffers();
         }
         
 
         void Update() {
+            if (rayMarchingMaterial)
+            {
+                if(nodes == null)
+                    InitializeBuffers();
 
+                if(sceneLight)
+                    rayMarchingMaterial.SetVector("_LightPositionWS", sceneLight.transform.position);
+
+                rayMarchingMaterial.SetVector("_ObjectWorldPos", transform.position);
+            }
         }
 
 
@@ -68,13 +77,6 @@ namespace PixelReyn.SimpleVoxelSystem
                 Gizmos.DrawWireCube(leaf.Position + position, (Vector3.one * leaf.HalfSize * 2));
             }
 
-        }
-
-        public VoxelObject voxelObject {
-            get
-            {
-                    return this.VoxelObject;
-            }
         }
 
         public void InitializeBuffers(bool force = false){
@@ -100,8 +102,9 @@ namespace PixelReyn.SimpleVoxelSystem
             colorBuffer = new ComputeBuffer(VoxelSettings.Instance.voxelColors.Length, 16, ComputeBufferType.Default);
             colorBuffer.SetData(VoxelSettings.Instance.voxelColors);
             if(rayMarchingMaterial){
-            if(!rayMarchingMaterial.name.Contains("Clone"))
-                rayMarchingMaterial = Instantiate(rayMarchingMaterial);
+            
+                if(!rayMarchingMaterial.name.Contains("Clone"))
+                    rayMarchingMaterial = Instantiate(rayMarchingMaterial);
 
                 rayMarchingMaterial.SetBuffer("_SVOBuffer", octreeBuffer);
                 rayMarchingMaterial.SetBuffer("_VoxelColors", colorBuffer);
@@ -255,6 +258,13 @@ namespace PixelReyn.SimpleVoxelSystem
                 this.center = center;
             }
         };
+
+        public VoxelObject voxelObject {
+            get
+            {
+                    return VoxelObject;
+            }
+        }
 
         #if UNITY_EDITOR
             [MenuItem("GameObject/SimpleVoxelSystem/Create Voxel Container", false, 10)]
