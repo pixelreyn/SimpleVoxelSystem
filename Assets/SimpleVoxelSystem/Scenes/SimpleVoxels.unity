@@ -280,8 +280,8 @@ MonoBehaviour:
   sceneLight: {fileID: 535515810}
   Dynamic: 0
   IsPlaying: 0
-  debugPosVec3: {x: -3.625, y: -0.375, z: 2.125}
-  debugPos2Vec3: {x: -3.745183, y: -0.3688135, z: 2}
+  debugPosVec3: {x: 1.625, y: 0.125, z: 1.625}
+  debugPos2Vec3: {x: 1.5294821, y: 0, z: 1.6853209}
   debugSize: -1
 --- !u!23 &744558718
 MeshRenderer:
