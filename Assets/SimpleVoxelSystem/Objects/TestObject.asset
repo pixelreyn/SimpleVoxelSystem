@@ -88,6 +88,42 @@ MonoBehaviour:
   - position: {x: -0.0625, y: 0.0625, z: -0.0625}
     size: 0.125
     voxelData: 1793
+  - position: {x: -3.5, y: 0.5, z: 0.5}
+    size: 1
+    voxelData: 0
+  - position: {x: -3.5, y: 0.5, z: 1.5}
+    size: 1
+    voxelData: 0
+  - position: {x: -3.5, y: 1.5, z: 0.5}
+    size: 1
+    voxelData: 0
+  - position: {x: -3.5, y: 1.5, z: 1.5}
+    size: 1
+    voxelData: 0
+  - position: {x: -2.5, y: 1.5, z: 0.5}
+    size: 1
+    voxelData: 0
+  - position: {x: -2.5, y: 1.5, z: 1.5}
+    size: 1
+    voxelData: 0
+  - position: {x: -3.875, y: 1.625, z: 2.125}
+    size: 0.25
+    voxelData: 641
+  - position: {x: -3.875, y: 1.625, z: 2.375}
+    size: 0.25
+    voxelData: 641
+  - position: {x: -3.875, y: 1.875, z: 2.375}
+    size: 0.25
+    voxelData: 705
+  - position: {x: -3.625, y: 1.625, z: 2.125}
+    size: 0.25
+    voxelData: 641
+  - position: {x: -3.625, y: 1.625, z: 2.375}
+    size: 0.25
+    voxelData: 641
+  - position: {x: -3.625, y: 1.875, z: 2.375}
+    size: 0.25
+    voxelData: 705
   - position: {x: 0.5, y: -0.5, z: -3.5}
     size: 1
     voxelData: 0

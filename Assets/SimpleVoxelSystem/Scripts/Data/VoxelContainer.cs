@@ -5,6 +5,8 @@ using Unity.Mathematics;
 using System.Threading.Tasks;
 using System.Linq;
 using Unity.VisualScripting;
+using System;
+
 
 
 
@@ -33,6 +35,10 @@ namespace PixelReyn.SimpleVoxelSystem
         private bool IsInitialized = false;
         public bool IsPlaying = false;
 
+        //small GUI helpers:
+        public Vector3 debugPosVec3 = Vector3.zero;
+        public Vector3 debugPos2Vec3 = Vector3.zero;
+        public float debugSize = 0;
 
         private void Awake(){
             position = transform.position;
@@ -77,6 +83,12 @@ namespace PixelReyn.SimpleVoxelSystem
                 Gizmos.DrawWireCube(leaf.Position + position, (Vector3.one * leaf.HalfSize * 2));
             }
 
+            //draw "Add" location hinting:
+            if (debugSize > 0)
+            {
+                Gizmos.DrawWireCube(debugPosVec3, (Vector3.one * debugSize));
+                Gizmos.DrawSphere(debugPos2Vec3, 0.2f * debugSize);
+            }
         }
 
         public void InitializeBuffers(bool force = false){
@@ -206,6 +218,47 @@ namespace PixelReyn.SimpleVoxelSystem
             }
             
             return (hit, hitNormal, hitCenter, Vector3.zero);
+        }
+
+        public Vector3 getOffsetToNewCentreClosest(Vector3 proposedPt, Vector3 hitCen, int intSize)
+        {
+            Vector3 offsetToNewCentre = Vector3.zero;
+            float invSize = 1f / intSize;
+
+            int axis = 1;  //up
+            float halfSizeHit = -1f;//, total = 0f;
+            Vector3 axisNormal;// = Vector3.zero;
+            Vector3 neigbourCenOffset = Vector3.zero;
+            //bool dirPos = true; //up, not down
+            for (int i = 0; i < 3; i++)
+            {
+                neigbourCenOffset[i] = proposedPt[i] - hitCen[i];
+                if (Math.Abs(neigbourCenOffset[i]) > halfSizeHit)      //use normalizedNormal instead?
+                {
+                    axis = i;
+                    axisNormal = Vector3.zero;
+                    axisNormal[i] = 1f;
+                    //    dirPos = (raymarch.hitPt[i] > raymarch.hitCen[i]);
+                    halfSizeHit = Math.Abs(proposedPt[i] - hitCen[i]);      //halfsize
+                }
+                //total += Math.Abs(proposedPt[i] - hitCen[i]);
+            }
+
+            // Align hitPoint to grid
+            for (int i = 0; i < 3; i++)
+            {
+                if (i == axis)
+                {
+                    offsetToNewCentre[i] = (neigbourCenOffset[i] < 0 ? -1 : 1) * (halfSizeHit + invSize / 2);
+                }
+                else
+                {
+                    //round to grid:
+                    offsetToNewCentre[i] = (float)Math.Ceiling((neigbourCenOffset[i] + halfSizeHit) * intSize) / intSize - halfSizeHit - invSize / 2;
+                }
+            }
+
+            return offsetToNewCentre;
         }
 
         public void DestroyBuffers(){
