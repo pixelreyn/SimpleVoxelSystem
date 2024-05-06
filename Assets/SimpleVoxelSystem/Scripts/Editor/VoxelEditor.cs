@@ -1,3 +1,4 @@
+using System;
 using Unity.Mathematics;
 using UnityEditor;
 using UnityEngine;
@@ -66,6 +67,8 @@ namespace PixelReyn.SimpleVoxelSystem {
             GUI.DragWindow(new Rect(0, 0, 10000, 20));
         }
 
+        private (bool isHit, Vector3 hitNorm, Vector3 hitCen, Vector3 hitPt) raymarch;
+
         void OnSceneGUI()
         {
             // Ensure user interaction is only when the VoxelWorld object is selected
@@ -82,12 +85,14 @@ namespace PixelReyn.SimpleVoxelSystem {
             Event e = Event.current;
 
             DrawGrid(voxelContainer);
+
+            Ray ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
+            Plane plane = new Plane(Vector3.up, voxelContainer.transform.position);
+            raymarch = voxelContainer.RayIntersect(ray);
+            voxelContainer.debugSize = -1;  //don't draw GUI hint box unless set below
             // Handle mouse input
             if (e.type == EventType.MouseDown && e.button == 0)
             {
-                Ray ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
-                Plane plane = new Plane(Vector3.up, voxelContainer.transform.position);
-                var raymarch = voxelContainer.RayIntersect(ray);
                 if (!raymarch.Item1 && plane.Raycast(ray, out float enter))
                 {
                     Vector3 hitPoint = ray.GetPoint(enter);
@@ -112,15 +117,13 @@ namespace PixelReyn.SimpleVoxelSystem {
                     voxelContainer.InitializeBuffers(true);
                     e.Use(); // Mark the event as used
                 }
-                else if(raymarch.Item1){
+                else if(raymarch.isHit){
                         switch (editModes[selectedEditModeIndex])
                         {
                             case "Add":
-                                float3 normalizedNormal = raymarch.Item2;
-                                float size = 1f / (voxelSize + 1f);
-                                normalizedNormal = math.normalize(normalizedNormal);
-                                Vector3 normalizedPoint = (float3)raymarch.Item3 + (-normalizedNormal);// * size); 
-                                voxelContainer.voxelObject.AddVoxel(new Voxel((sbyte)selectedVoxelId, isTransparent, isStatic, (byte)voxelSize), normalizedPoint);
+                                int intSize = (int)Math.Pow(2f, voxelSize);
+                                Vector3 addNewCentre = voxelContainer.getOffsetToNewCentreClosest(raymarch.hitPt, raymarch.hitCen, intSize) + raymarch.hitCen;
+                                voxelContainer.voxelObject.AddVoxel(new Voxel((sbyte)selectedVoxelId, isTransparent, isStatic, (byte)voxelSize), addNewCentre);
                                 break;
                             case "Replace":
                                 voxelContainer.voxelObject.AddVoxel(new Voxel((sbyte)selectedVoxelId, isTransparent, isStatic), raymarch.Item3);
@@ -135,6 +138,24 @@ namespace PixelReyn.SimpleVoxelSystem {
                         e.Use(); // Mark the event as used
                 }
 
+            } 
+            else
+            {
+                //not mousedown, so draw a cube at proposed "Add" position IF we intersect current voxels:
+                if (raymarch.isHit)
+                {
+                    switch (editModes[selectedEditModeIndex])
+                    {
+                        case "Add":
+                            int intSize = (int)Math.Pow(2f, voxelSize);
+                            Vector3 offsetToNewCentre = voxelContainer.getOffsetToNewCentreClosest(raymarch.hitPt, raymarch.hitCen, intSize);
+
+                            voxelContainer.debugPosVec3 = raymarch.hitCen + offsetToNewCentre;  //box at proposed point
+                            voxelContainer.debugSize = 1f / intSize;                         //new box size (inverted power of 2 from GUI size)
+                            voxelContainer.debugPos2Vec3 = raymarch.hitPt;  //draw circle
+                            break;
+                    }
+                }
             }
             SceneView.RepaintAll();
         }
